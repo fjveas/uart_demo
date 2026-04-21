@@ -59,6 +59,7 @@ module uart_top
 			rx_frame_error <= 1'b0;
 		end else begin
 			rx_ready_sync <= rx_ready_pre;
+			/* rx_ready and rx_frame_error are single-cycle wrapper pulses. */
 			rx_ready <= ~rx_ready_sync & rx_ready_pre;
 
 			/*
