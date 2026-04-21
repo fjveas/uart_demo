@@ -23,8 +23,8 @@ module uart_tx
 	localparam TX_SEND  = 2'b10;
 	localparam TX_STOP  = 2'b11;
 
-	reg [1:0] state = TX_IDLE, state_next;
-	reg [2:0] counter = 3'd0, counter_next;
+	reg [1:0] state, state_next;
+	reg [2:0] counter, counter_next;
 	reg [7:0] tx_data_reg;
 
 	always @(posedge clk) begin

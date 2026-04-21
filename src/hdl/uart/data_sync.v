@@ -11,6 +11,7 @@
 module data_sync
 (
 	input clk,
+	input reset,
 	input in,
 	output reg stable_out
 );
@@ -20,10 +21,17 @@ module data_sync
 	wire in_sync = in_sync_sr[0];
 
 	always @(posedge clk)
-		in_sync_sr <= {in, in_sync_sr[1]};
+		if (reset)
+			/*
+			 * UART lines are typically idle-high; initializing the synchronizer to 1
+			 * avoids a false start-bit detect right after reset.
+			 */
+			in_sync_sr <= 2'b11;
+		else
+			in_sync_sr <= {in, in_sync_sr[1]};
 
 	/* Filter out short spikes on the input line */
-	reg [1:0] sync_counter = 'b11, sync_counter_next;
+	reg [1:0] sync_counter, sync_counter_next;
 	reg stable_out_next;
 
 	always @(*) begin
@@ -48,8 +56,13 @@ module data_sync
 	end
 
 	always @(posedge clk) begin
-		stable_out <= stable_out_next;
-		sync_counter <= sync_counter_next;
+		if (reset) begin
+			sync_counter <= 2'b11;
+			stable_out <= 1'b1;
+		end else begin
+			stable_out <= stable_out_next;
+			sync_counter <= sync_counter_next;
+		end
 	end
 
 endmodule

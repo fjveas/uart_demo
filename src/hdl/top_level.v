@@ -136,6 +136,7 @@ module top_level
 		.rx(uart_rx),
 		.rx_data(),
 		.rx_ready(),
+		.rx_frame_error(),
 		.tx(uart_tx),
 		.tx_start(tx_start),
 		.tx_data(tx_data),
