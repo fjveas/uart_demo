@@ -28,6 +28,7 @@ module tb_uart_top;
 
 	reg rx_in;
 	reg rx_ack;
+	reg [255:0] current_case;
 
 	reg tx_start;
 	reg [7:0] tx_data;
@@ -63,8 +64,15 @@ module tb_uart_top;
 
 	task automatic fail(input [1023:0] msg);
 		begin
-			$display("FAIL: %0s", msg);
+			$display("FAIL [%0s]: %0s", current_case, msg);
 			$finish(1);
+		end
+	endtask
+
+	task automatic set_case(input [255:0] name);
+		begin
+			current_case = name;
+			$display("  case: %0s", name);
 		end
 	endtask
 
@@ -338,39 +346,40 @@ module tb_uart_top;
 		rx_ack = 1'b0;
 		tx_start = 1'b0;
 		tx_data = 8'h00;
+		current_case = "";
 
 		repeat (10) @(posedge clk);
 		reset = 1'b0;
 
 		/* Alternating-bit pattern through the full TX path: baud tick
 		 * generator, uart_tx FSM, and output pin. */
-		$display("  TX: tx_send_and_check(8'hA5)");
+		set_case("tx A5");
 		tx_send_and_check(8'hA5);
 
 		/* All-zeros frame: all data bits low, verifies the baud tick
 		 * generator and TX FSM hold timing across a run of identical bits. */
-		$display("  TX: tx_send_and_check(8'h00)");
+		set_case("tx 00");
 		tx_send_and_check(8'h00);
 
 		/* All-ones frame: all data bits high (same polarity as idle and stop),
 		 * verifies framing boundaries are still correctly identified. */
-		$display("  TX: tx_send_and_check(8'hFF)");
+		set_case("tx FF");
 		tx_send_and_check(8'hFF);
 
 		/* Good 8N1 frame through the full RX path: real-clock bit timing,
 		 * 8x oversampling, data_sync CDC, and rx_valid/rx_ack handshake. */
-		$display("  RX: rx_send_and_expect(8'h3C, good stop)");
+		set_case("rx good stop");
 		rx_send_and_expect(8'h3C, 1'b1);
 
 		/* Frame with a bad stop bit: verifies rx_frame_error propagates
 		 * through uart_top and clears cleanly after rx_ack. */
-		$display("  RX: rx_send_and_expect(8'h5A, bad stop)");
+		set_case("rx bad stop");
 		rx_send_and_expect(8'h5A, 1'b0);
 
 		/* Integration-level overrun: a second start edge arrives before the
 		 * consumer acks the first byte; verifies rx_overrun asserts and the
 		 * first byte remains intact until rx_ack. */
-		$display("  RX: overrun test");
+		set_case("rx overrun");
 		rx_overrun_test();
 
 		$display("PASS");

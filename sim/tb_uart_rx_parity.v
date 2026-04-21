@@ -29,6 +29,7 @@ module tb_uart_rx_parity;
 	reg baud8_tick;
 	reg rx;
 	reg rx_ack;
+	reg [255:0] current_case;
 
 	wire [7:0] rx_data_even;
 	wire rx_valid_even;
@@ -72,8 +73,15 @@ module tb_uart_rx_parity;
 
 	task automatic fail(input [1023:0] msg);
 		begin
-			$display("FAIL: %0s", msg);
+			$display("FAIL [%0s]: %0s", current_case, msg);
 			$finish(1);
+		end
+	endtask
+
+	task automatic set_case(input [255:0] name);
+		begin
+			current_case = name;
+			$display("  case: %0s", name);
 		end
 	endtask
 
@@ -231,6 +239,7 @@ module tb_uart_rx_parity;
 		baud8_tick = 1'b0;
 		rx         = 1'b1;
 		rx_ack     = 1'b0;
+		current_case = "";
 
 		repeat (5) @(posedge clk);
 		reset = 1'b0;
@@ -241,14 +250,14 @@ module tb_uart_rx_parity;
 		 * Drive parity bit = 0 (matches even parity, violates odd parity).
 		 * Expected: dut_even no error, dut_odd error.
 		 */
-		$display("  8'hA5 parity=0  [even: ok,  odd: error]");
+		set_case("rx parity A5 bit0");
 		recv_parity_expect(8'hA5, 1'b0, 1'b0, 1'b1);
 
 		/*
 		 * 8'hA5, parity bit = 1 (violates even, matches odd).
 		 * Expected: dut_even error, dut_odd no error.
 		 */
-		$display("  8'hA5 parity=1  [even: error, odd: ok ]");
+		set_case("rx parity A5 bit1");
 		recv_parity_expect(8'hA5, 1'b1, 1'b1, 1'b0);
 
 		/*
@@ -256,14 +265,14 @@ module tb_uart_rx_parity;
 		 * Drive parity bit = 1 (matches even parity, violates odd parity).
 		 * Expected: dut_even no error, dut_odd error.
 		 */
-		$display("  8'h07 parity=1  [even: ok,  odd: error]");
+		set_case("rx parity 07 bit1");
 		recv_parity_expect(8'h07, 1'b1, 1'b0, 1'b1);
 
 		/*
 		 * 8'h07, parity bit = 0 (violates even, matches odd).
 		 * Expected: dut_even error, dut_odd no error.
 		 */
-		$display("  8'h07 parity=0  [even: error, odd: ok ]");
+		set_case("rx parity 07 bit0");
 		recv_parity_expect(8'h07, 1'b0, 1'b1, 1'b0);
 
 		/*
@@ -271,7 +280,7 @@ module tb_uart_rx_parity;
 		 * frame; drive parity=0 to verify the even case at the boundary.
 		 * Expected: dut_even no error, dut_odd error.
 		 */
-		$display("  8'h00 parity=0  [even: ok,  odd: error]");
+		set_case("rx parity 00 bit0");
 		recv_parity_expect(8'h00, 1'b0, 1'b0, 1'b1);
 
 		/*
@@ -280,7 +289,7 @@ module tb_uart_rx_parity;
 		 * Drive parity=0 (matches even).
 		 * Expected: dut_even no error, dut_odd error.
 		 */
-		$display("  8'hFF parity=0  [even: ok,  odd: error]");
+		set_case("rx parity FF bit0");
 		recv_parity_expect(8'hFF, 1'b0, 1'b0, 1'b1);
 
 		$display("PASS");

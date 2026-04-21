@@ -23,6 +23,7 @@ module tb_uart_top_parity;
 
 	reg rx_in;
 	reg rx_ack;
+	reg [255:0] current_case;
 
 	reg tx_start;
 	reg [7:0] tx_data;
@@ -87,8 +88,15 @@ module tb_uart_top_parity;
 
 	task automatic fail(input [1023:0] msg);
 		begin
-			$display("FAIL: %0s", msg);
+			$display("FAIL [%0s]: %0s", current_case, msg);
 			$finish(1);
+		end
+	endtask
+
+	task automatic set_case(input [255:0] name);
+		begin
+			current_case = name;
+			$display("  case: %0s", name);
 		end
 	endtask
 
@@ -306,18 +314,19 @@ module tb_uart_top_parity;
 		rx_ack = 1'b0;
 		tx_start = 1'b0;
 		tx_data = 8'h00;
+		current_case = "";
 
 		repeat (10) @(posedge clk);
 		reset = 1'b0;
 
-		$display("  TX parity: tx_send_and_check_parity(8'hA5)");
+		set_case("tx parity A5");
 		tx_send_and_check_parity(8'hA5);
-		$display("  TX parity: tx_send_and_check_parity(8'h07)");
+		set_case("tx parity 07");
 		tx_send_and_check_parity(8'h07);
 
-		$display("  RX parity: 8'hA5 parity=0 [even: ok, odd: error]");
+		set_case("rx parity A5 bit0");
 		rx_send_and_expect_parity(8'hA5, 1'b0, 1'b0, 1'b1);
-		$display("  RX parity: 8'hA5 parity=1 [even: error, odd: ok]");
+		set_case("rx parity A5 bit1");
 		rx_send_and_expect_parity(8'hA5, 1'b1, 1'b1, 1'b0);
 
 		$display("PASS");

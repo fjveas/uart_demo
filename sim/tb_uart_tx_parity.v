@@ -24,6 +24,7 @@ module tb_uart_tx_parity;
 	reg baud_tick;
 	reg tx_start;
 	reg [7:0] tx_data;
+	reg [255:0] current_case;
 
 	wire tx_even, tx_busy_even;
 	wire tx_odd,  tx_busy_odd;
@@ -52,8 +53,15 @@ module tb_uart_tx_parity;
 
 	task automatic fail(input [1023:0] msg);
 		begin
-			$display("FAIL: %0s", msg);
+			$display("FAIL [%0s]: %0s", current_case, msg);
 			$finish(1);
+		end
+	endtask
+
+	task automatic set_case(input [255:0] name);
+		begin
+			current_case = name;
+			$display("  case: %0s", name);
 		end
 	endtask
 
@@ -132,6 +140,7 @@ module tb_uart_tx_parity;
 		baud_tick = 1'b0;
 		tx_start  = 1'b0;
 		tx_data   = 8'h00;
+		current_case = "";
 
 		repeat (5) @(posedge clk);
 		reset = 1'b0;
@@ -142,7 +151,7 @@ module tb_uart_tx_parity;
 		 * Expected: even parity bit = 0, odd parity bit = 1.
 		 * Exercises the case where the even-parity bit must be 0.
 		 */
-		$display("  send_and_check_parity(8'hA5)  [^=0: even=0, odd=1]");
+		set_case("tx parity A5");
 		send_and_check_parity(8'hA5);
 
 		/*
@@ -150,7 +159,7 @@ module tb_uart_tx_parity;
 		 * Expected: even parity bit = 1, odd parity bit = 0.
 		 * Exercises the opposite polarity: even-parity bit must be 1.
 		 */
-		$display("  send_and_check_parity(8'h07)  [^=1: even=1, odd=0]");
+		set_case("tx parity 07");
 		send_and_check_parity(8'h07);
 
 		/*
@@ -158,7 +167,7 @@ module tb_uart_tx_parity;
 		 * frame (not carry over from the previous one).
 		 * Expected: even parity bit = 0, odd parity bit = 1.
 		 */
-		$display("  send_and_check_parity(8'h00)  [^=0: even=0, odd=1]");
+		set_case("tx parity 00");
 		send_and_check_parity(8'h00);
 
 		/*
@@ -166,7 +175,7 @@ module tb_uart_tx_parity;
 		 * Expected: even parity bit = 0, odd parity bit = 1.
 		 * Verifies accumulator handles a run of all-ones correctly.
 		 */
-		$display("  send_and_check_parity(8'hFF)  [^=0: even=0, odd=1]");
+		set_case("tx parity FF");
 		send_and_check_parity(8'hFF);
 
 		$display("PASS");

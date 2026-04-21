@@ -19,6 +19,7 @@ module tb_uart_rx;
 	reg baud8_tick;
 	reg rx; /* UART idle-high */
 	reg rx_ack;
+	reg [255:0] current_case;
 
 	wire [7:0] rx_data;
 	wire rx_valid;
@@ -43,8 +44,15 @@ module tb_uart_rx;
 
 	task automatic fail(input [1023:0] msg);
 		begin
-			$display("FAIL: %0s", msg);
+			$display("FAIL [%0s]: %0s", current_case, msg);
 			$finish(1);
+		end
+	endtask
+
+	task automatic set_case(input [255:0] name);
+		begin
+			current_case = name;
+			$display("  case: %0s", name);
 		end
 	endtask
 
@@ -248,6 +256,7 @@ module tb_uart_rx;
 		baud8_tick = 1'b0;
 		rx = 1'b1;
 		rx_ack = 1'b0;
+		current_case = "";
 
 		/* Reset for a few cycles */
 		repeat (5) @(posedge clk);
@@ -258,30 +267,30 @@ module tb_uart_rx;
 
 		/* A brief low glitch (< half a bit period) must be filtered out by
 		 * data_sync hysteresis and must not produce rx_valid. */
-		$display("  start glitch filter");
+		set_case("start glitch filter");
 		start_glitch_expect_no_byte();
 
 		/* Normal 8N1 frame: verifies data integrity, rx_valid handshake,
 		 * and that rx_frame_error stays clear on a good stop bit. */
-		$display("  recv_expect(8'hA5, good stop)");
+		set_case("rx good stop");
 		recv_expect(8'hA5, 1'b1, 16);
 
 		/* Frame with a bad stop bit (stop=0): verifies rx_frame_error
 		 * asserts alongside rx_valid and clears after rx_ack. */
-		$display("  recv_expect(8'h3C, bad stop)");
+		set_case("rx bad stop");
 		recv_expect(8'h3C, 1'b0, 16);
 
 		/* Two good frames sent with no idle gap between them: verifies the
 		 * FSM returns to RX_IDLE promptly after rx_ack and catches the next
 		 * start bit without missing it. */
-		$display("  back-to-back recv_expect(8'h12, 8'h34)");
+		set_case("rx back to back");
 		recv_expect(8'h12, 1'b1, 0);
 		recv_expect(8'h34, 1'b1, 16);
 
 		/* A new start edge arrives while the previous byte sits unacknowledged
 		 * in RX_READY: verifies rx_overrun latches, rx_valid stays held, and
 		 * both flags clear together on rx_ack. */
-		$display("  overrun test");
+		set_case("rx overrun");
 		overrun_test();
 
 		$display("PASS");
