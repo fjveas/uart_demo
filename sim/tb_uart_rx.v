@@ -59,6 +59,15 @@ module tb_uart_rx;
 		end
 	endtask
 
+	task automatic pulse_ack_clk;
+		begin
+			@(negedge clk);
+			rx_ack = 1'b1;
+			@(negedge clk);
+			rx_ack = 1'b0;
+		end
+	endtask
+
 	task automatic hold_line(input line_level, input integer ticks);
 		integer i;
 		begin
@@ -120,11 +129,16 @@ module tb_uart_rx;
 				tick8();
 			end
 
-			rx_ack = 1'b1;
-			tick8();
-			rx_ack = 1'b0;
-			if (rx_valid !== 1'b0)
+			pulse_ack_clk();
+			begin : wait_valid_clear
+				for (i = 0; i < 32; i = i + 1) begin
+					if (rx_valid !== 1'b0)
+						tick8();
+					else
+						disable wait_valid_clear;
+				end
 				fail("rx_valid did not clear after rx_ack");
+			end
 			if (rx_frame_error !== 1'b0)
 				fail("rx_frame_error did not clear after rx_ack");
 			if (rx_overrun !== 1'b0)
@@ -190,21 +204,27 @@ module tb_uart_rx;
 			if (rx_overrun !== 1'b0)
 				fail("Overrun test: rx_overrun set before start bit");
 
-			/* Drive a start bit while still in RX_READY */
-			hold_line(1'b0, 8);
+			/* Drive a new start edge while still in RX_READY. */
+			hold_line(1'b1, 4);
+			hold_line(1'b0, 4);
 			if (rx_overrun !== 1'b1)
-				fail("Overrun test: rx_overrun not set after start bit in RX_READY");
+				fail("Overrun test: rx_overrun not set after start edge in RX_READY");
 
 			/* rx_valid should still be held */
 			if (rx_valid !== 1'b1)
 				fail("Overrun test: rx_valid dropped before rx_ack");
 
 			/* Acknowledge — both flags must clear */
-			rx_ack = 1'b1;
-			tick8();
-			rx_ack = 1'b0;
-			if (rx_valid !== 1'b0)
+			pulse_ack_clk();
+			begin : wait_overrun_clear
+				for (i = 0; i < 32; i = i + 1) begin
+					if (rx_valid !== 1'b0)
+						tick8();
+					else
+						disable wait_overrun_clear;
+				end
 				fail("Overrun test: rx_valid did not clear after rx_ack");
+			end
 			if (rx_overrun !== 1'b0)
 				fail("Overrun test: rx_overrun did not clear after rx_ack");
 

@@ -47,6 +47,8 @@ module uart_rx
 	reg [2:0] spacing_counter, spacing_counter_next;
 	wire next_bit;
 	assign next_bit = (spacing_counter == 'd4);
+	wire rx_ack_seen;
+	wire start_attempt;
 
 	/* Finite-state machine */
 	reg [2:0] state, state_next;
@@ -54,6 +56,14 @@ module uart_rx
 	reg [7:0] rx_data_next;
 	reg frame_error, frame_error_next;
 	reg overrun, overrun_next;
+	reg rx_ack_pending;
+	reg rx_bit_prev;
+	reg start_pending;
+	wire overrun_live;
+
+	assign rx_ack_seen = rx_ack_pending | rx_ack;
+	assign start_attempt = rx_bit_prev & ~rx_bit;
+	assign overrun_live = overrun | start_pending;
 
 	always @(*) begin
 		state_next = state;
@@ -77,7 +87,7 @@ module uart_rx
 			if (next_bit)
 				state_next = RX_READY;
 		RX_READY: begin
-			if (rx_ack)
+			if (rx_ack_seen)
 				state_next = RX_IDLE;
 		end
 		default:
@@ -118,14 +128,19 @@ module uart_rx
 		RX_READY: begin
 			/*
 			 * Hold data/error valid until the consumer explicitly acknowledges
-			 * the byte. This avoids missing one-cycle pulses at integration time.
+			 * the byte. rx_ack is captured in the clk domain, so a one-cycle
+			 * pulse is enough even if it does not line up with baud8_tick.
 			 */
 			rx_valid = 1'b1;
 			rx_frame_error = frame_error;
-			rx_overrun = overrun;
-			/* Latch overrun if a new start bit arrives before rx_ack. */
-			if (rx_bit == 1'b0)
-				overrun_next = 1'b1;
+			rx_overrun = overrun_live;
+			/*
+			 * Latch overrun only on a new high-to-low transition while the
+			 * previous byte is still waiting for rx_ack.
+			 */
+			overrun_next = overrun_live;
+			if (rx_ack_seen)
+				overrun_next = 1'b0;
 		end
 		endcase
 	end
@@ -138,13 +153,34 @@ module uart_rx
 			rx_data <= 'd0;
 			frame_error <= 1'b0;
 			overrun <= 1'b0;
-		end else if (baud8_tick) begin
-			spacing_counter <= spacing_counter_next;
-			bit_counter <= bit_counter_next;
-			state <= state_next;
-			rx_data <= rx_data_next;
-			frame_error <= frame_error_next;
-			overrun <= overrun_next;
+			rx_ack_pending <= 1'b0;
+			rx_bit_prev <= 1'b1;
+			start_pending <= 1'b0;
+		end else begin
+			rx_bit_prev <= rx_bit;
+
+			if (rx_ack)
+				rx_ack_pending <= 1'b1;
+
+			if (state == RX_READY && start_attempt)
+				start_pending <= 1'b1;
+
+			if (baud8_tick) begin
+				spacing_counter <= spacing_counter_next;
+				bit_counter <= bit_counter_next;
+				state <= state_next;
+				rx_data <= rx_data_next;
+				frame_error <= frame_error_next;
+				overrun <= overrun_next;
+
+				if (state == RX_READY && rx_ack_seen)
+					rx_ack_pending <= 1'b0;
+
+				if (state == RX_READY && rx_ack_seen)
+					start_pending <= 1'b0;
+				else if (state == RX_IDLE)
+					start_pending <= 1'b0;
+			end
 		end
 	end
 

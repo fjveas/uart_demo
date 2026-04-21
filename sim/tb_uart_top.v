@@ -79,6 +79,15 @@ module tb_uart_top;
 		end
 	endtask
 
+	task automatic pulse_rx_ack;
+		begin
+			@(negedge clk);
+			rx_ack = 1'b1;
+			@(negedge clk);
+			rx_ack = 1'b0;
+		end
+	endtask
+
 	/*
 	 * The baud generators are synchronous but `tick` is combinational off the
 	 * accumulator reg. The UART blocks "consume" tick on the following clk edge,
@@ -203,12 +212,6 @@ module tb_uart_top;
 			rx_in = stop_ok ? 1'b1 : 1'b0;
 			/* rx_valid asserts once the stop bit has been checked. */
 			wait_rx_valid(40 * CYCLES_PER_BIT_APPROX, rx_data_seen, rx_frame_error_seen);
-			/*
-			 * Return line to idle before further waits. A bad stop bit leaves
-			 * rx_in=0; if left low into RX_READY it would be mistaken for a
-			 * new start bit and falsely assert rx_overrun.
-			 */
-			rx_in = 1'b1;
 			repeat (CYCLES_PER_BIT_APPROX / 2) @(posedge clk);
 			if (rx_data_seen !== data_byte)
 				fail("RX data mismatch");
@@ -236,8 +239,7 @@ module tb_uart_top;
 				@(posedge clk);
 			end
 
-			@(negedge clk);
-			rx_ack = 1'b1;
+			pulse_rx_ack();
 			begin : wait_ack_clear
 				for (ack_cycles = 0; ack_cycles < (2 * CYCLES_PER_BIT_APPROX); ack_cycles = ack_cycles + 1) begin
 					@(posedge clk);
@@ -251,8 +253,6 @@ module tb_uart_top;
 				fail("rx_frame_error did not clear after rx_ack");
 			if (rx_overrun !== 1'b0)
 				fail("rx_overrun did not clear after rx_ack");
-			@(negedge clk);
-			rx_ack = 1'b0;
 
 			/* Idle */
 			rx_in = 1'b1;
@@ -291,19 +291,20 @@ module tb_uart_top;
 			if (rx_overrun !== 1'b0)
 				fail("Overrun test: rx_overrun set before start bit");
 
-			/* Drive a start bit while still in RX_READY */
+			/* Drive a fresh start edge while still in RX_READY. */
+			rx_in = 1'b1;
+			repeat (CYCLES_PER_BIT_APPROX / 2) @(posedge clk);
 			rx_in = 1'b0;
-			repeat (CYCLES_PER_BIT_APPROX) @(posedge clk);
+			repeat (CYCLES_PER_BIT_APPROX / 2) @(posedge clk);
 			#1ps;
 			if (rx_overrun !== 1'b1)
-				fail("Overrun test: rx_overrun not set after start bit in RX_READY");
+				fail("Overrun test: rx_overrun not set after start edge in RX_READY");
 			if (rx_valid !== 1'b1)
 				fail("Overrun test: rx_valid dropped before rx_ack");
 
 			/* Acknowledge — all flags must clear */
 			rx_in = 1'b1;
-			@(negedge clk);
-			rx_ack = 1'b1;
+			pulse_rx_ack();
 			begin : wait_ack_clear_ovr
 				for (ack_cycles = 0; ack_cycles < (2 * CYCLES_PER_BIT_APPROX); ack_cycles = ack_cycles + 1) begin
 					@(posedge clk);
@@ -315,8 +316,6 @@ module tb_uart_top;
 			end
 			if (rx_overrun !== 1'b0)
 				fail("Overrun test: rx_overrun did not clear after rx_ack");
-			@(negedge clk);
-			rx_ack = 1'b0;
 
 			repeat (2 * CYCLES_PER_BIT_APPROX) @(posedge clk);
 		end
