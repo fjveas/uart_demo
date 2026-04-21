@@ -13,14 +13,19 @@ module uart_rx
 	input reset,
 	input baud8_tick,
 	input rx,
+	input rx_ack,
 	output reg [7:0] rx_data,
-	output reg rx_ready,
+	output reg rx_valid,
 	/*
-	 * Asserted alongside rx_ready to indicate a framing error (bad stop bit).
-	 * This is a pulse-like signal at the "byte ready" boundary: it stays
-	 * asserted while the internal FSM is in RX_READY (until the next baud8_tick).
+	 * rx_frame_error and rx_overrun are only meaningful while rx_valid is
+	 * asserted; the consumer must sample them before issuing rx_ack.
+	 *
+	 * rx_frame_error: bad stop bit on the current byte.
+	 * rx_overrun:     a new start bit arrived while the previous byte was
+	 *                 waiting for rx_ack — that incoming frame will be lost.
 	 */
-	output reg rx_frame_error
+	output reg rx_frame_error,
+	output reg rx_overrun
 );
 
 	localparam RX_IDLE  = 'b000;
@@ -48,6 +53,7 @@ module uart_rx
 	reg [2:0] bit_counter, bit_counter_next;
 	reg [7:0] rx_data_next;
 	reg frame_error, frame_error_next;
+	reg overrun, overrun_next;
 
 	always @(*) begin
 		state_next = state;
@@ -70,8 +76,10 @@ module uart_rx
 		RX_STOP:
 			if (next_bit)
 				state_next = RX_READY;
-		RX_READY:
-			state_next = RX_IDLE;
+		RX_READY: begin
+			if (rx_ack)
+				state_next = RX_IDLE;
+		end
 		default:
 			state_next = RX_IDLE;
 		endcase
@@ -80,16 +88,19 @@ module uart_rx
 	always @(*) begin
 		bit_counter_next = bit_counter;
 		spacing_counter_next = spacing_counter + 'd1;
-		rx_ready = 1'b0;
+		rx_valid = 1'b0;
 		rx_frame_error = 1'b0;
+		rx_overrun = 1'b0;
 		rx_data_next = rx_data;
 		frame_error_next = frame_error;
+		overrun_next = overrun;
 
 		case (state)
 		RX_IDLE: begin
 			bit_counter_next = 'd0;
 			spacing_counter_next = 'd0;
 			frame_error_next = 1'b0;
+			overrun_next = 1'b0;
 		end
 		RX_RECV: begin
 			if (next_bit) begin
@@ -104,13 +115,19 @@ module uart_rx
 					frame_error_next = 1'b1;
 			end
 		end
-		RX_READY:
-			rx_ready = 1'b1;
-		endcase
-
-		/* Provide the framing result at the same time as rx_ready. */
-		if (state == RX_READY)
+		RX_READY: begin
+			/*
+			 * Hold data/error valid until the consumer explicitly acknowledges
+			 * the byte. This avoids missing one-cycle pulses at integration time.
+			 */
+			rx_valid = 1'b1;
 			rx_frame_error = frame_error;
+			rx_overrun = overrun;
+			/* Latch overrun if a new start bit arrives before rx_ack. */
+			if (rx_bit == 1'b0)
+				overrun_next = 1'b1;
+		end
+		endcase
 	end
 
 	always @(posedge clk) begin
@@ -120,12 +137,14 @@ module uart_rx
 			state <= RX_IDLE;
 			rx_data <= 'd0;
 			frame_error <= 1'b0;
+			overrun <= 1'b0;
 		end else if (baud8_tick) begin
 			spacing_counter <= spacing_counter_next;
 			bit_counter <= bit_counter_next;
 			state <= state_next;
 			rx_data <= rx_data_next;
 			frame_error <= frame_error_next;
+			overrun <= overrun_next;
 		end
 	end
 

@@ -4,6 +4,7 @@
  * Minimal self-checking testbench for uart_rx:
  * - Verifies normal reception (8N1, LSB-first)
  * - Verifies framing error when stop bit is 0
+ * - Verifies rx_overrun when a start bit arrives before rx_ack
  *
  * Example (from repo root):
  *   verilator -Wall --binary sim/tb_uart_rx.v \
@@ -17,19 +18,23 @@ module tb_uart_rx;
 	reg reset;
 	reg baud8_tick;
 	reg rx; /* UART idle-high */
+	reg rx_ack;
 
 	wire [7:0] rx_data;
-	wire rx_ready;
+	wire rx_valid;
 	wire rx_frame_error;
+	wire rx_overrun;
 
 	uart_rx dut (
 		.clk(clk),
 		.reset(reset),
 		.baud8_tick(baud8_tick),
 		.rx(rx),
+		.rx_ack(rx_ack),
 		.rx_data(rx_data),
-		.rx_ready(rx_ready),
-		.rx_frame_error(rx_frame_error)
+		.rx_valid(rx_valid),
+		.rx_frame_error(rx_frame_error),
+		.rx_overrun(rx_overrun)
 	);
 
 	always #5 clk = ~clk;
@@ -65,7 +70,7 @@ module tb_uart_rx;
 
 	task automatic recv_expect(input [7:0] data_byte, input stop_ok, input integer idle_ticks_after);
 		integer i;
-		reg ready_seen;
+		reg valid_seen;
 		begin
 			/* Start bit */
 			hold_line(1'b0, 8);
@@ -77,19 +82,19 @@ module tb_uart_rx;
 			/* Stop bit */
 			hold_line(stop_ok ? 1'b1 : 1'b0, 8);
 
-			/* Wait for rx_ready to assert (should happen shortly after stop) */
-			ready_seen = 1'b0;
-			begin : wait_ready
+			/* Wait for rx_valid to assert (should happen shortly after stop). */
+			valid_seen = 1'b0;
+			begin : wait_valid
 				for (i = 0; i < 200; i = i + 1) begin
-					if (rx_ready) begin
-						ready_seen = 1'b1;
-						disable wait_ready;
+					if (rx_valid) begin
+						valid_seen = 1'b1;
+						disable wait_valid;
 					end
 					tick8();
 				end
 			end
-			if (!ready_seen)
-				fail("Timed out waiting for rx_ready");
+			if (!valid_seen)
+				fail("Timed out waiting for rx_valid");
 
 			if (rx_data !== data_byte)
 				fail("rx_data mismatch");
@@ -102,13 +107,36 @@ module tb_uart_rx;
 					fail("Expected rx_frame_error on bad stop bit");
 			end
 
+			if (rx_overrun !== 1'b0)
+				fail("Unexpected rx_overrun on normal frame");
+
+			/*
+			 * rx_valid should stay asserted until the consumer acknowledges
+			 * the received byte.
+			 */
+			repeat (4) begin
+				if (rx_valid !== 1'b1)
+					fail("rx_valid deasserted before rx_ack");
+				tick8();
+			end
+
+			rx_ack = 1'b1;
+			tick8();
+			rx_ack = 1'b0;
+			if (rx_valid !== 1'b0)
+				fail("rx_valid did not clear after rx_ack");
+			if (rx_frame_error !== 1'b0)
+				fail("rx_frame_error did not clear after rx_ack");
+			if (rx_overrun !== 1'b0)
+				fail("rx_overrun did not clear after rx_ack");
+
 			/* Return to idle for a bit (or start the next frame immediately) */
 			if (idle_ticks_after > 0)
 				hold_line(1'b1, idle_ticks_after);
 		end
 	endtask
 
-	/* Short low glitch should be filtered and must not produce rx_ready. */
+	/* Short low glitch should be filtered and must not produce rx_valid. */
 	task automatic start_glitch_expect_no_byte;
 		integer i;
 		begin
@@ -121,10 +149,66 @@ module tb_uart_rx;
 
 			/* Ensure no byte was reported */
 			for (i = 0; i < 200; i = i + 1) begin
-				if (rx_ready)
-					fail("Unexpected rx_ready after start glitch");
+				if (rx_valid)
+					fail("Unexpected rx_valid after start glitch");
 				tick8();
 			end
+		end
+	endtask
+
+	/*
+	 * Send a valid frame, hold rx_ack, drive a start bit on the line, then
+	 * verify rx_overrun latches and clears after rx_ack.
+	 */
+	task automatic overrun_test;
+		integer i;
+		reg valid_seen;
+		reg [7:0] test_byte;
+		begin
+			hold_line(1'b1, 8);
+			test_byte = 8'hA5;
+
+			/* Send a complete valid frame */
+			hold_line(1'b0, 8);
+			for (i = 0; i < 8; i = i + 1)
+				hold_line(test_byte[i], 8);
+			hold_line(1'b1, 8);
+
+			/* Wait for rx_valid without acking */
+			valid_seen = 1'b0;
+			begin : wait_valid_ovr
+				for (i = 0; i < 200; i = i + 1) begin
+					if (rx_valid) begin
+						valid_seen = 1'b1;
+						disable wait_valid_ovr;
+					end
+					tick8();
+				end
+			end
+			if (!valid_seen)
+				fail("Overrun test: timed out waiting for rx_valid");
+			if (rx_overrun !== 1'b0)
+				fail("Overrun test: rx_overrun set before start bit");
+
+			/* Drive a start bit while still in RX_READY */
+			hold_line(1'b0, 8);
+			if (rx_overrun !== 1'b1)
+				fail("Overrun test: rx_overrun not set after start bit in RX_READY");
+
+			/* rx_valid should still be held */
+			if (rx_valid !== 1'b1)
+				fail("Overrun test: rx_valid dropped before rx_ack");
+
+			/* Acknowledge — both flags must clear */
+			rx_ack = 1'b1;
+			tick8();
+			rx_ack = 1'b0;
+			if (rx_valid !== 1'b0)
+				fail("Overrun test: rx_valid did not clear after rx_ack");
+			if (rx_overrun !== 1'b0)
+				fail("Overrun test: rx_overrun did not clear after rx_ack");
+
+			hold_line(1'b1, 16);
 		end
 	endtask
 
@@ -133,6 +217,7 @@ module tb_uart_rx;
 		reset = 1'b1;
 		baud8_tick = 1'b0;
 		rx = 1'b1;
+		rx_ack = 1'b0;
 
 		/* Reset for a few cycles */
 		repeat (5) @(posedge clk);
@@ -149,6 +234,8 @@ module tb_uart_rx;
 		/* Back-to-back good frames with minimal idle between them */
 		recv_expect(8'h12, 1'b1, 0);
 		recv_expect(8'h34, 1'b1, 16);
+
+		overrun_test();
 
 		$display("PASS");
 		$finish(0);

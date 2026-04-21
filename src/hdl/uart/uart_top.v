@@ -16,8 +16,10 @@ module uart_top
 	input reset,
 	input rx,
 	output [7:0] rx_data,
-	output reg rx_ready,
-	output reg rx_frame_error,
+	output rx_valid,
+	output rx_frame_error,
+	output rx_overrun,
+	input rx_ack,
 	output tx,
 	input tx_start,
 	input [7:0] tx_data,
@@ -26,10 +28,9 @@ module uart_top
 
 	wire baud8_tick;
 	wire baud_tick;
-
-	reg rx_ready_sync;
-	wire rx_ready_pre;
+	wire rx_valid_pre;
 	wire rx_frame_error_pre;
+	wire rx_overrun_pre;
 
 	uart_baud_tick_gen #(
 		.CLK_FREQUENCY(CLK_FREQUENCY),
@@ -47,31 +48,20 @@ module uart_top
 		.reset(reset),
 		.baud8_tick(baud8_tick),
 		.rx(rx),
+		.rx_ack(rx_ack),
 		.rx_data(rx_data),
-		.rx_ready(rx_ready_pre),
-		.rx_frame_error(rx_frame_error_pre)
+		.rx_valid(rx_valid_pre),
+		.rx_frame_error(rx_frame_error_pre),
+		.rx_overrun(rx_overrun_pre)
 	);
 
-	always @(posedge clk) begin
-		if (reset) begin
-			rx_ready_sync <= 1'b0;
-			rx_ready <= 1'b0;
-			rx_frame_error <= 1'b0;
-		end else begin
-			rx_ready_sync <= rx_ready_pre;
-			/* rx_ready and rx_frame_error are single-cycle wrapper pulses. */
-			rx_ready <= ~rx_ready_sync & rx_ready_pre;
-
-			/*
-			 * rx_frame_error is meaningful only when a new byte becomes ready.
-			 * Pulse it in sync with rx_ready.
-			 */
-			if (~rx_ready_sync & rx_ready_pre)
-				rx_frame_error <= rx_frame_error_pre;
-			else
-				rx_frame_error <= 1'b0;
-		end
-	end
+	/*
+	 * rx_valid, rx_frame_error, and rx_overrun remain asserted until rx_ack
+	 * acknowledges the received byte.
+	 */
+	assign rx_valid = rx_valid_pre;
+	assign rx_frame_error = rx_frame_error_pre;
+	assign rx_overrun = rx_overrun_pre;
 
 	uart_baud_tick_gen #(
 		.CLK_FREQUENCY(CLK_FREQUENCY),
