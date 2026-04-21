@@ -10,7 +10,8 @@
 module uart_top
 #(
 	parameter CLK_FREQUENCY = 100000000,
-	parameter BAUD_RATE = 115200
+	parameter BAUD_RATE     = 115200,
+	parameter PARITY        = 0  /* PARITY_NONE=0  PARITY_EVEN=1  PARITY_ODD=2 */
 )(
 	input clk,
 	input reset,
@@ -18,6 +19,7 @@ module uart_top
 	output [7:0] rx_data,
 	output rx_valid,
 	output rx_frame_error,
+	output rx_parity_error,
 	output rx_overrun,
 	input rx_ack,
 	output tx,
@@ -30,6 +32,7 @@ module uart_top
 	wire baud_tick;
 	wire rx_valid_pre;
 	wire rx_frame_error_pre;
+	wire rx_parity_error_pre;
 	wire rx_overrun_pre;
 
 	uart_baud_tick_gen #(
@@ -43,7 +46,9 @@ module uart_top
 		.tick(baud8_tick)
 	);
 
-	uart_rx uart_rx_blk (
+	uart_rx #(
+		.PARITY(PARITY)
+	) uart_rx_blk (
 		.clk(clk),
 		.reset(reset),
 		.baud8_tick(baud8_tick),
@@ -52,16 +57,18 @@ module uart_top
 		.rx_data(rx_data),
 		.rx_valid(rx_valid_pre),
 		.rx_frame_error(rx_frame_error_pre),
+		.rx_parity_error(rx_parity_error_pre),
 		.rx_overrun(rx_overrun_pre)
 	);
 
 	/*
-	 * rx_valid, rx_frame_error, and rx_overrun remain asserted until rx_ack
-	 * acknowledges the received byte.
+	 * rx_valid, rx_frame_error, rx_parity_error, and rx_overrun remain
+	 * asserted until rx_ack acknowledges the received byte.
 	 */
-	assign rx_valid = rx_valid_pre;
-	assign rx_frame_error = rx_frame_error_pre;
-	assign rx_overrun = rx_overrun_pre;
+	assign rx_valid        = rx_valid_pre;
+	assign rx_frame_error  = rx_frame_error_pre;
+	assign rx_parity_error = rx_parity_error_pre;
+	assign rx_overrun      = rx_overrun_pre;
 
 	uart_baud_tick_gen #(
 		.CLK_FREQUENCY(CLK_FREQUENCY),
@@ -74,7 +81,9 @@ module uart_top
 		.tick(baud_tick)
 	);
 
-	uart_tx uart_tx_blk (
+	uart_tx #(
+		.PARITY(PARITY)
+	) uart_tx_blk (
 		.clk(clk),
 		.reset(reset),
 		.baud_tick(baud_tick),

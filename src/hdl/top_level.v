@@ -126,7 +126,7 @@ module top_level
 		end
 	end
 
-	/* Módulo UART a 115200/8N1 */
+	/* UART demo instance at 115200 baud using the default 8N1 configuration. */
 	uart_top #(
 		.CLK_FREQUENCY(100000000),
 		.BAUD_RATE(115200)
@@ -137,6 +137,7 @@ module top_level
 		.rx_data(),
 		.rx_valid(),
 		.rx_frame_error(),
+		.rx_parity_error(),
 		.rx_overrun(),
 		.rx_ack(1'b1),
 		.tx(uart_tx),

@@ -8,7 +8,9 @@
 `timescale 1ns / 1ps
 
 module uart_rx
-(
+#(
+	parameter PARITY = 0  /* 0=none  1=even  2=odd */
+)(
 	input clk,
 	input reset,
 	input baud8_tick,
@@ -17,22 +19,30 @@ module uart_rx
 	output reg [7:0] rx_data,
 	output reg rx_valid,
 	/*
-	 * rx_frame_error and rx_overrun are only meaningful while rx_valid is
-	 * asserted; the consumer must sample them before issuing rx_ack.
+	 * rx_frame_error, rx_parity_error, and rx_overrun are only meaningful
+	 * while rx_valid is asserted; the consumer must sample them before
+	 * issuing rx_ack.
 	 *
-	 * rx_frame_error: bad stop bit on the current byte.
-	 * rx_overrun:     a new start bit arrived while the previous byte was
-	 *                 waiting for rx_ack — that incoming frame will be lost.
+	 * rx_frame_error:  bad stop bit on the current byte.
+	 * rx_parity_error: received parity bit does not match the expected value
+	 *                  (only asserted when PARITY != 0).
+	 * rx_overrun:      a new start bit arrived while the previous byte was
+	 *                  waiting for rx_ack — that incoming frame will be lost.
 	 */
 	output reg rx_frame_error,
+	output reg rx_parity_error,
 	output reg rx_overrun
 );
 
-	localparam RX_IDLE  = 'b000;
-	localparam RX_START = 'b001;
-	localparam RX_RECV  = 'b010;
-	localparam RX_STOP  = 'b011;
-	localparam RX_READY = 'b100;
+	localparam PARITY_EVEN = 1;
+	localparam PARITY_ODD  = 2;
+
+	localparam RX_IDLE   = 3'b000;
+	localparam RX_START  = 3'b001;
+	localparam RX_RECV   = 3'b010;
+	localparam RX_STOP   = 3'b011;
+	localparam RX_READY  = 3'b100;
+	localparam RX_PARITY = 3'b101;
 
 	/* Clock synchronized rx input */
 	wire rx_bit;
@@ -55,15 +65,17 @@ module uart_rx
 	reg [2:0] bit_counter, bit_counter_next;
 	reg [7:0] rx_data_next;
 	reg frame_error, frame_error_next;
+	reg parity_error, parity_error_next;
+	reg parity_acc, parity_acc_next;
 	reg overrun, overrun_next;
 	reg rx_ack_pending;
 	reg rx_bit_prev;
 	reg start_pending;
 	wire overrun_live;
 
-	assign rx_ack_seen = rx_ack_pending | rx_ack;
+	assign rx_ack_seen  = rx_ack_pending | rx_ack;
 	assign start_attempt = rx_bit_prev & ~rx_bit;
-	assign overrun_live = overrun | start_pending;
+	assign overrun_live  = overrun | start_pending;
 
 	always @(*) begin
 		state_next = state;
@@ -74,7 +86,7 @@ module uart_rx
 				state_next = RX_START;
 		RX_START: begin
 			if (next_bit) begin
-				if (rx_bit == 1'b0) // Start bit must be a 0
+				if (rx_bit == 1'b0)
 					state_next = RX_RECV;
 				else
 					state_next = RX_IDLE;
@@ -82,6 +94,9 @@ module uart_rx
 		end
 		RX_RECV:
 			if (next_bit && bit_counter == 'd7)
+				state_next = (PARITY == PARITY_EVEN || PARITY == PARITY_ODD) ? RX_PARITY : RX_STOP;
+		RX_PARITY:
+			if (next_bit)
 				state_next = RX_STOP;
 		RX_STOP:
 			if (next_bit)
@@ -96,26 +111,39 @@ module uart_rx
 	end
 
 	always @(*) begin
-		bit_counter_next = bit_counter;
+		bit_counter_next    = bit_counter;
 		spacing_counter_next = spacing_counter + 'd1;
-		rx_valid = 1'b0;
-		rx_frame_error = 1'b0;
-		rx_overrun = 1'b0;
-		rx_data_next = rx_data;
-		frame_error_next = frame_error;
-		overrun_next = overrun;
+		rx_valid            = 1'b0;
+		rx_frame_error      = 1'b0;
+		rx_parity_error     = 1'b0;
+		rx_overrun          = 1'b0;
+		rx_data_next        = rx_data;
+		frame_error_next    = frame_error;
+		parity_error_next   = parity_error;
+		parity_acc_next     = parity_acc;
+		overrun_next        = overrun;
 
 		case (state)
 		RX_IDLE: begin
-			bit_counter_next = 'd0;
+			bit_counter_next  = 'd0;
 			spacing_counter_next = 'd0;
-			frame_error_next = 1'b0;
-			overrun_next = 1'b0;
+			frame_error_next  = 1'b0;
+			parity_error_next = 1'b0;
+			parity_acc_next   = 1'b0;
+			overrun_next      = 1'b0;
 		end
 		RX_RECV: begin
 			if (next_bit) begin
 				bit_counter_next = bit_counter + 'd1;
-				rx_data_next = {rx_bit, rx_data[7:1]};
+				rx_data_next     = {rx_bit, rx_data[7:1]};
+				parity_acc_next  = parity_acc ^ rx_bit;
+			end
+		end
+		RX_PARITY: begin
+			if (next_bit) begin
+				/* Compare the received parity bit against the expected value. */
+				if (rx_bit !== (parity_acc ^ (PARITY == PARITY_ODD ? 1'b1 : 1'b0)))
+					parity_error_next = 1'b1;
 			end
 		end
 		RX_STOP: begin
@@ -131,9 +159,10 @@ module uart_rx
 			 * the byte. rx_ack is captured in the clk domain, so a one-cycle
 			 * pulse is enough even if it does not line up with baud8_tick.
 			 */
-			rx_valid = 1'b1;
-			rx_frame_error = frame_error;
-			rx_overrun = overrun_live;
+			rx_valid        = 1'b1;
+			rx_frame_error  = frame_error;
+			rx_parity_error = parity_error;
+			rx_overrun      = overrun_live;
 			/*
 			 * Latch overrun only on a new high-to-low transition while the
 			 * previous byte is still waiting for rx_ack.
@@ -142,20 +171,23 @@ module uart_rx
 			if (rx_ack_seen)
 				overrun_next = 1'b0;
 		end
+		default: ;
 		endcase
 	end
 
 	always @(posedge clk) begin
 		if (reset) begin
 			spacing_counter <= 'd0;
-			bit_counter <= 'd0;
-			state <= RX_IDLE;
-			rx_data <= 'd0;
-			frame_error <= 1'b0;
-			overrun <= 1'b0;
-			rx_ack_pending <= 1'b0;
-			rx_bit_prev <= 1'b1;
-			start_pending <= 1'b0;
+			bit_counter     <= 'd0;
+			state           <= RX_IDLE;
+			rx_data         <= 'd0;
+			frame_error     <= 1'b0;
+			parity_error    <= 1'b0;
+			parity_acc      <= 1'b0;
+			overrun         <= 1'b0;
+			rx_ack_pending  <= 1'b0;
+			rx_bit_prev     <= 1'b1;
+			start_pending   <= 1'b0;
 		end else begin
 			rx_bit_prev <= rx_bit;
 
@@ -167,18 +199,18 @@ module uart_rx
 
 			if (baud8_tick) begin
 				spacing_counter <= spacing_counter_next;
-				bit_counter <= bit_counter_next;
-				state <= state_next;
-				rx_data <= rx_data_next;
-				frame_error <= frame_error_next;
-				overrun <= overrun_next;
+				bit_counter     <= bit_counter_next;
+				state           <= state_next;
+				rx_data         <= rx_data_next;
+				frame_error     <= frame_error_next;
+				parity_error    <= parity_error_next;
+				parity_acc      <= parity_acc_next;
+				overrun         <= overrun_next;
 
-				if (state == RX_READY && rx_ack_seen)
+				if (state == RX_READY && rx_ack_seen) begin
 					rx_ack_pending <= 1'b0;
-
-				if (state == RX_READY && rx_ack_seen)
-					start_pending <= 1'b0;
-				else if (state == RX_IDLE)
+					start_pending  <= 1'b0;
+				end else if (state == RX_IDLE)
 					start_pending <= 1'b0;
 			end
 		end

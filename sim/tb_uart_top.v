@@ -35,6 +35,7 @@ module tb_uart_top;
 	wire [7:0] rx_data;
 	wire rx_valid;
 	wire rx_frame_error;
+	wire rx_parity_error;
 	wire rx_overrun;
 	wire tx;
 	wire tx_busy;
@@ -49,6 +50,7 @@ module tb_uart_top;
 		.rx_data(rx_data),
 		.rx_valid(rx_valid),
 		.rx_frame_error(rx_frame_error),
+		.rx_parity_error(rx_parity_error),
 		.rx_overrun(rx_overrun),
 		.rx_ack(rx_ack),
 		.tx(tx),
@@ -227,6 +229,9 @@ module tb_uart_top;
 			#1ps;
 			if (rx_overrun !== 1'b0)
 				fail("Unexpected rx_overrun on normal RX frame");
+			/* PARITY=0 (8N1): parity logic is compiled out, so this must always be 0. */
+			if (rx_parity_error !== 1'b0)
+				fail("Unexpected rx_parity_error in 8N1 mode");
 
 			/*
 			 * rx_valid should remain asserted until acknowledged, then clear
