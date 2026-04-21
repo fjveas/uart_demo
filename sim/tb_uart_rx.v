@@ -63,7 +63,7 @@ module tb_uart_rx;
 		end
 	endtask
 
-	task automatic recv_expect(input [7:0] data_byte, input stop_ok);
+	task automatic recv_expect(input [7:0] data_byte, input stop_ok, input integer idle_ticks_after);
 		integer i;
 		reg ready_seen;
 		begin
@@ -102,8 +102,29 @@ module tb_uart_rx;
 					fail("Expected rx_frame_error on bad stop bit");
 			end
 
-			/* Return to idle for a bit */
-			hold_line(1'b1, 16);
+			/* Return to idle for a bit (or start the next frame immediately) */
+			if (idle_ticks_after > 0)
+				hold_line(1'b1, idle_ticks_after);
+		end
+	endtask
+
+	/* Short low glitch should be filtered and must not produce rx_ready. */
+	task automatic start_glitch_expect_no_byte;
+		integer i;
+		begin
+			/* Idle for a bit */
+			hold_line(1'b1, 32);
+
+			/* Glitch low for a couple of oversample ticks, then back high */
+			hold_line(1'b0, 2);
+			hold_line(1'b1, 64);
+
+			/* Ensure no byte was reported */
+			for (i = 0; i < 200; i = i + 1) begin
+				if (rx_ready)
+					fail("Unexpected rx_ready after start glitch");
+				tick8();
+			end
 		end
 	endtask
 
@@ -120,8 +141,14 @@ module tb_uart_rx;
 		/* Provide some ticks with idle-high line */
 		hold_line(1'b1, 32);
 
-		recv_expect(8'hA5, 1'b1);
-		recv_expect(8'h3C, 1'b0);
+		start_glitch_expect_no_byte();
+
+		recv_expect(8'hA5, 1'b1, 16);
+		recv_expect(8'h3C, 1'b0, 16);
+
+		/* Back-to-back good frames with minimal idle between them */
+		recv_expect(8'h12, 1'b1, 0);
+		recv_expect(8'h34, 1'b1, 16);
 
 		$display("PASS");
 		$finish(0);

@@ -62,6 +62,9 @@ module tb_uart_tx;
 			if (tx !== 1'b0)
 				fail("Start bit not driven low");
 
+			if (tx_busy !== 1'b1)
+				fail("tx_busy not asserted during frame");
+
 			/* Advance into TX_SEND and check each data bit */
 			tick1();
 			for (i = 0; i < 8; i = i + 1) begin
@@ -78,6 +81,56 @@ module tb_uart_tx;
 			tick1();
 			if (tx_busy !== 1'b0)
 				fail("tx_busy did not deassert in IDLE");
+		end
+	endtask
+
+	/*
+	 * Verify that data is latched on start and doesn't change mid-frame,
+	 * and that tx_start pulses during TX busy are ignored.
+	 */
+	task automatic send_with_noise_and_check(input [7:0] data_byte, input [7:0] noisy_byte);
+		integer i;
+		begin
+			tx_data = data_byte;
+			tx_start = 1'b1;
+			@(posedge clk);
+			tx_start = 1'b0;
+			@(posedge clk);
+
+			/* Immediately change the input bus; TX should keep the original byte. */
+			tx_data = noisy_byte;
+
+			/* Start bit */
+			if (tx !== 1'b0)
+				fail("Start bit not driven low (noise test)");
+
+			/* Enter TX_SEND */
+			tick1();
+
+			/* Mid-frame, pulse tx_start with another byte; should be ignored. */
+			tx_data = ~data_byte;
+			tx_start = 1'b1;
+			@(posedge clk);
+			tx_start = 1'b0;
+			@(posedge clk);
+
+			for (i = 0; i < 8; i = i + 1) begin
+				if (tx !== data_byte[i])
+					fail("Latched data changed mid-frame");
+				tick1();
+			end
+
+			/* Stop bit then return to IDLE */
+			if (tx !== 1'b1)
+				fail("Stop bit not driven high (noise test)");
+			tick1();
+			if (tx_busy !== 1'b0)
+				fail("tx_busy did not deassert in IDLE (noise test)");
+
+			/* Ensure we didn't accidentally start a second frame. */
+			repeat (10) @(posedge clk);
+			if (tx !== 1'b1)
+				fail("Unexpected second frame after ignored tx_start");
 		end
 	endtask
 
@@ -99,6 +152,7 @@ module tb_uart_tx;
 		send_and_check(8'hA5);
 		send_and_check(8'h00);
 		send_and_check(8'hFF);
+		send_with_noise_and_check(8'h55, 8'hAA);
 
 		$display("PASS");
 		$finish(0);
