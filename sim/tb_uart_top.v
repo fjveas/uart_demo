@@ -322,6 +322,11 @@ module tb_uart_top;
 	endtask
 
 	initial begin
+		$dumpfile("build/tb_uart_top/tb_uart_top.fst");
+		$dumpvars(0, tb_uart_top);
+
+		$display("[tb_uart_top]");
+
 		clk = 1'b0;
 		reset = 1'b1;
 		rx_in = 1'b1;
@@ -332,15 +337,35 @@ module tb_uart_top;
 		repeat (10) @(posedge clk);
 		reset = 1'b0;
 
-		/* TX path (with internal baud tick generation) */
+		/* Alternating-bit pattern through the full TX path: baud tick
+		 * generator, uart_tx FSM, and output pin. */
+		$display("  TX: tx_send_and_check(8'hA5)");
 		tx_send_and_check(8'hA5);
+
+		/* All-zeros frame: all data bits low, verifies the baud tick
+		 * generator and TX FSM hold timing across a run of identical bits. */
+		$display("  TX: tx_send_and_check(8'h00)");
 		tx_send_and_check(8'h00);
+
+		/* All-ones frame: all data bits high (same polarity as idle and stop),
+		 * verifies framing boundaries are still correctly identified. */
+		$display("  TX: tx_send_and_check(8'hFF)");
 		tx_send_and_check(8'hFF);
 
-		/* RX path (with internal oversampling tick generation) */
+		/* Good 8N1 frame through the full RX path: real-clock bit timing,
+		 * 8x oversampling, data_sync CDC, and rx_valid/rx_ack handshake. */
+		$display("  RX: rx_send_and_expect(8'h3C, good stop)");
 		rx_send_and_expect(8'h3C, 1'b1);
+
+		/* Frame with a bad stop bit: verifies rx_frame_error propagates
+		 * through uart_top and clears cleanly after rx_ack. */
+		$display("  RX: rx_send_and_expect(8'h5A, bad stop)");
 		rx_send_and_expect(8'h5A, 1'b0);
 
+		/* Integration-level overrun: a second start edge arrives before the
+		 * consumer acks the first byte; verifies rx_overrun asserts and the
+		 * first byte remains intact until rx_ack. */
+		$display("  RX: overrun test");
 		rx_overrun_test();
 
 		$display("PASS");

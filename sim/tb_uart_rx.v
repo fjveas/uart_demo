@@ -233,6 +233,11 @@ module tb_uart_rx;
 	endtask
 
 	initial begin
+		$dumpfile("build/tb_uart_rx/tb_uart_rx.fst");
+		$dumpvars(0, tb_uart_rx);
+
+		$display("[tb_uart_rx]");
+
 		clk = 1'b0;
 		reset = 1'b1;
 		baud8_tick = 1'b0;
@@ -243,18 +248,35 @@ module tb_uart_rx;
 		repeat (5) @(posedge clk);
 		reset = 1'b0;
 
-		/* Provide some ticks with idle-high line */
+		/* Settle the line high before any frames arrive. */
 		hold_line(1'b1, 32);
 
+		/* A brief low glitch (< half a bit period) must be filtered out by
+		 * data_sync hysteresis and must not produce rx_valid. */
+		$display("  start glitch filter");
 		start_glitch_expect_no_byte();
 
+		/* Normal 8N1 frame: verifies data integrity, rx_valid handshake,
+		 * and that rx_frame_error stays clear on a good stop bit. */
+		$display("  recv_expect(8'hA5, good stop)");
 		recv_expect(8'hA5, 1'b1, 16);
+
+		/* Frame with a bad stop bit (stop=0): verifies rx_frame_error
+		 * asserts alongside rx_valid and clears after rx_ack. */
+		$display("  recv_expect(8'h3C, bad stop)");
 		recv_expect(8'h3C, 1'b0, 16);
 
-		/* Back-to-back good frames with minimal idle between them */
+		/* Two good frames sent with no idle gap between them: verifies the
+		 * FSM returns to RX_IDLE promptly after rx_ack and catches the next
+		 * start bit without missing it. */
+		$display("  back-to-back recv_expect(8'h12, 8'h34)");
 		recv_expect(8'h12, 1'b1, 0);
 		recv_expect(8'h34, 1'b1, 16);
 
+		/* A new start edge arrives while the previous byte sits unacknowledged
+		 * in RX_READY: verifies rx_overrun latches, rx_valid stays held, and
+		 * both flags clear together on rx_ack. */
+		$display("  overrun test");
 		overrun_test();
 
 		$display("PASS");

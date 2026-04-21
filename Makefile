@@ -45,15 +45,15 @@ test: lint tb_uart_tx tb_uart_rx tb_uart_top
 
 $(BUILD_DIR)/tb_uart_tx/Vtb_uart_tx: $(TB_TX) $(UART_TX)
 	mkdir -p $(BUILD_DIR)/tb_uart_tx
-	$(VERILATOR) -Wall --binary --Mdir $(BUILD_DIR)/tb_uart_tx $(TB_TX) $(UART_TX)
+	$(VERILATOR) -Wall --trace-fst --binary --Mdir $(BUILD_DIR)/tb_uart_tx $(TB_TX) $(UART_TX)
 
 $(BUILD_DIR)/tb_uart_rx/Vtb_uart_rx: $(TB_RX) $(UART_RX) $(DATA_SYNC)
 	mkdir -p $(BUILD_DIR)/tb_uart_rx
-	$(VERILATOR) -Wall --binary --Mdir $(BUILD_DIR)/tb_uart_rx $(TB_RX) $(UART_RX) $(DATA_SYNC)
+	$(VERILATOR) -Wall --trace-fst --binary --Mdir $(BUILD_DIR)/tb_uart_rx $(TB_RX) $(UART_RX) $(DATA_SYNC)
 
 $(BUILD_DIR)/tb_uart_top/Vtb_uart_top: $(TB_TOP) $(UART_TOP) $(UART_TX) $(UART_RX) $(BAUD_GEN) $(DATA_SYNC)
 	mkdir -p $(BUILD_DIR)/tb_uart_top
-	$(VERILATOR) -Wall --binary --Mdir $(BUILD_DIR)/tb_uart_top $(TB_TOP) $(UART_TOP) $(UART_TX) $(UART_RX) $(BAUD_GEN) $(DATA_SYNC)
+	$(VERILATOR) -Wall --trace-fst --binary --Mdir $(BUILD_DIR)/tb_uart_top $(TB_TOP) $(UART_TOP) $(UART_TX) $(UART_RX) $(BAUD_GEN) $(DATA_SYNC)
 
 clean:
 	rm -rf $(BUILD_DIR)
