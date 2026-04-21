@@ -127,10 +127,10 @@ module top_level
 	end
 
 	/* Módulo UART a 115200/8N1 */
-	uart_basic #(
+	uart_top #(
 		.CLK_FREQUENCY(100000000),
 		.BAUD_RATE(115200)
-	) uart_basic_inst (
+	) uart_top_inst (
 		.clk(clk_100M),
 		.reset(reset),
 		.rx(uart_rx),

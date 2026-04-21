@@ -22,14 +22,14 @@ UART_TX := src/hdl/uart/uart_tx.v
 UART_RX := src/hdl/uart/uart_rx.v
 DATA_SYNC := src/hdl/uart/data_sync.v
 BAUD_GEN := src/hdl/uart/uart_baud_tick_gen.v
-UART_BASIC := src/hdl/uart/uart_basic.v
+UART_TOP := src/hdl/uart/uart_top.v
 
 .PHONY: all lint test tb_uart_tx tb_uart_rx clean
 
 all: test
 
 lint:
-	$(VERILATOR) --lint-only -Wall $(DATA_SYNC) $(BAUD_GEN) $(UART_RX) $(UART_TX) $(UART_BASIC)
+	$(VERILATOR) --lint-only -Wall $(DATA_SYNC) $(BAUD_GEN) $(UART_RX) $(UART_TX) $(UART_TOP)
 
 tb_uart_tx: $(BUILD_DIR)/tb_uart_tx/Vtb_uart_tx
 	./$(BUILD_DIR)/tb_uart_tx/Vtb_uart_tx
@@ -49,4 +49,3 @@ $(BUILD_DIR)/tb_uart_rx/Vtb_uart_rx: $(TB_RX) $(UART_RX) $(DATA_SYNC)
 
 clean:
 	rm -rf $(BUILD_DIR)
-

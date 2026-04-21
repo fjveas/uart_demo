@@ -1,13 +1,13 @@
 /*
- * uart_basic.v
+ * uart_top.v
  * 2017/02/01 - Felipe Veas <felipe.veasv at usm.cl>
  *
- * Universal Asynchronous Receiver/Transmitter.
+ * Universal Asynchronous Receiver/Transmitter (top-level wrapper).
  */
 
 `timescale 1ns / 1ps
 
-module uart_basic
+module uart_top
 #(
 	parameter CLK_FREQUENCY = 100000000,
 	parameter BAUD_RATE = 115200
