@@ -1,6 +1,6 @@
 /*
  * data_sync.v
- * 2017/05/13 - Felipe Veas <felipe.veasv at usm.cl>
+ * 2017/05/13 - Felipe Veas
  *
  * This module synchronizes the input with respect the clock signal
  * and filters short spikes on the input line.

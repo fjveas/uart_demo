@@ -1,6 +1,6 @@
 /*
  * uart_tx.v
- * 2017/02/01 - Felipe Veas <felipe.veasv at usm.cl>
+ * 2017/02/01 - Felipe Veas
  *
  * Asynchronous Transmitter.
  */

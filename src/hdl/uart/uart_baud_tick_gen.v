@@ -1,6 +1,6 @@
 /*
  * uart_baud_tick_gen.v
- * 2017/02/01 - Felipe Veas <felipe.veasv at usm.cl>
+ * 2017/02/01 - Felipe Veas
  *
  * Baud clock generator for UART, original code from:
  * http://fpga4fun.com/SerialInterface.html
