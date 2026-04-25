@@ -1,8 +1,9 @@
 # UART demo Makefile (Verilator-focused)
 #
 # Common targets:
-#   make         lint + compile all testbenches
-#   make test    lint + compile + run all testbenches
+#   make         compile all testbenches
+#   make lint    lint compile-time and runtime top levels
+#   make test    compile + run all testbenches
 #   make clean
 #
 # Notes:
@@ -42,7 +43,7 @@ ALL_BINARIES := \
 	$(BUILD_DIR)/tb_uart_rx_parity/Vtb_uart_rx_parity \
 	$(BUILD_DIR)/tb_uart_top_parity/Vtb_uart_top_parity
 
-all: lint $(ALL_BINARIES)
+all: $(ALL_BINARIES)
 
 lint:
 	$(VERILATOR) --lint-only -Wall --top-module uart_top $(DATA_SYNC) $(BAUD_GEN) $(UART_RX) $(UART_TX) $(UART_TOP)
@@ -69,7 +70,7 @@ tb_uart_rx_parity: $(BUILD_DIR)/tb_uart_rx_parity/Vtb_uart_rx_parity
 tb_uart_top_parity: $(BUILD_DIR)/tb_uart_top_parity/Vtb_uart_top_parity
 	./$(BUILD_DIR)/tb_uart_top_parity/Vtb_uart_top_parity
 
-test: lint tb_uart_tx tb_uart_rx tb_uart_top tb_uart_top_runtime tb_uart_tx_parity tb_uart_rx_parity tb_uart_top_parity
+test: tb_uart_tx tb_uart_rx tb_uart_top tb_uart_top_runtime tb_uart_tx_parity tb_uart_rx_parity tb_uart_top_parity
 
 $(BUILD_DIR)/tb_uart_tx/Vtb_uart_tx: $(TB_TX) $(UART_TX)
 	mkdir -p $(BUILD_DIR)/tb_uart_tx
