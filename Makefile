@@ -1,8 +1,8 @@
 # UART demo Makefile (Verilator-focused)
 #
 # Common targets:
-#   make lint
-#   make test
+#   make         lint + compile all testbenches
+#   make test    lint + compile + run all testbenches
 #   make clean
 #
 # Notes:
@@ -33,7 +33,16 @@ UART_TOP_RUNTIME := src/hdl/uart/uart_top_runtime.v
 
 .PHONY: all lint test tb_uart_tx tb_uart_rx tb_uart_top tb_uart_top_runtime tb_uart_tx_parity tb_uart_rx_parity tb_uart_top_parity clean
 
-all: test
+ALL_BINARIES := \
+	$(BUILD_DIR)/tb_uart_tx/Vtb_uart_tx \
+	$(BUILD_DIR)/tb_uart_rx/Vtb_uart_rx \
+	$(BUILD_DIR)/tb_uart_top/Vtb_uart_top \
+	$(BUILD_DIR)/tb_uart_top_runtime/Vtb_uart_top_runtime \
+	$(BUILD_DIR)/tb_uart_tx_parity/Vtb_uart_tx_parity \
+	$(BUILD_DIR)/tb_uart_rx_parity/Vtb_uart_rx_parity \
+	$(BUILD_DIR)/tb_uart_top_parity/Vtb_uart_top_parity
+
+all: lint $(ALL_BINARIES)
 
 lint:
 	$(VERILATOR) --lint-only -Wall --top-module uart_top $(DATA_SYNC) $(BAUD_GEN) $(UART_RX) $(UART_TX) $(UART_TOP)
