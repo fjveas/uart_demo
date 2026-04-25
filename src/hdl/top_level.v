@@ -57,11 +57,12 @@ module top_level
 	assign leds = switches;
 
 	/* Payload (11 chars) */
-	localparam STR_LEN = 11;
+	localparam STR_LEN = 13;
 	wire [STR_LEN*8-1:0] message = {
 		8'h48, 8'h65, 8'h6c, 8'h6c, 8'h6f,
 		8'h20,
-		8'h77, 8'h6f, 8'h72, 8'h6c, 8'h64
+		8'h77, 8'h6f, 8'h72, 8'h6c, 8'h64,
+		8'h0d, 8'h0a
 	};
 
 	/* Contador de bytes */
