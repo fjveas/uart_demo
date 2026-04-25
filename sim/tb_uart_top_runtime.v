@@ -323,7 +323,7 @@ module tb_uart_top_runtime;
         integer ack_cycles;
         begin
             wait_rx_valid_capture(timeout_cycles);
-            /* Drive line high only after rx_valid — not before — so that a
+            /* Drive line high only after rx_valid -- not before -- so that a
              * bad stop bit (stop=0) is still low when the DUT samples it. */
             rx_in = 1'b1;
             #1ps;
@@ -401,7 +401,7 @@ module tb_uart_top_runtime;
      * Receive at 115200, withhold rx_ack, change baud to 9600, then ack.
      * The baud gen must not update rx_increment_active while rx_valid is
      * asserted (RX_READY state). Verified by receiving the next frame at
-     * 9600 — incorrect accumulator phase from an early switch would corrupt it.
+     * 9600 -- incorrect accumulator phase from an early switch would corrupt it.
      */
     task automatic rx_baud_gate_test;
         integer ack_cycles;
@@ -427,7 +427,7 @@ module tb_uart_top_runtime;
              */
             rx_increment_before = dut.baud_tick_gen_blk.rx_increment_active;
 
-            /* rx_valid is high; switch baud — gate must suppress the update. */
+            /* rx_valid is high; switch baud -- gate must suppress the update. */
             cfg_baud_sel = BAUD_SEL_9600;
             repeat (10 * cpb_115) @(posedge clk);
             #1ps;

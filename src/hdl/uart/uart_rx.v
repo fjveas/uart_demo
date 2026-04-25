@@ -27,7 +27,7 @@ module uart_rx
      * rx_parity_error: received parity bit does not match the expected value
      *                  (only asserted when PARITY != 0).
      * rx_overrun:      a new start bit arrived while the previous byte was
-     *                  waiting for rx_ack — that incoming frame will be lost.
+     *                  waiting for rx_ack -- that incoming frame will be lost.
      */
     output rx_frame_error,
     output rx_parity_error,
@@ -76,7 +76,7 @@ module uart_rx_core
      * rx_parity_error: received parity bit does not match the expected value
      *                  (only asserted when cfg_parity != 0).
      * rx_overrun:      a new start bit arrived while the previous byte was
-     *                  waiting for rx_ack — that incoming frame will be lost.
+     *                  waiting for rx_ack -- that incoming frame will be lost.
      */
     output reg rx_frame_error,
     output reg rx_parity_error,

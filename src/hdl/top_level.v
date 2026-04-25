@@ -26,19 +26,19 @@ module top_level
 );
 
     /*
-     * Convertir la señal del botón reset_n a 'active HIGH'
-     * y sincronizar con el reloj.
+     * Convert board-level reset_n to active-high reset and synchronize it to
+     * the clock.
      */
     reg [1:0] reset_sr;
     wire reset = reset_sr[1];
     always @(posedge clk_100M)
         reset_sr <= {reset_sr[0], ~reset_n};
 
-    /* Apagar el display de 7 segmentos */
+    /* Turn off the 7-segment display. */
     assign ss_value = 8'hFF;
     assign ss_select = 8'hFF;
 
-    /* Estados de la máquina */
+    /* FSM states. */
     localparam S_IDLE    = 'b0001;
     localparam S_BEGIN   = 'b0010;
     localparam S_TX_DATA = 'b0100;
@@ -47,7 +47,7 @@ module top_level
     reg [3:0] state, state_next = S_IDLE;
     assign rgb_led16 = state[3:1];
 
-    /* Señales de control y datos */
+    /* Control and data signals. */
     wire tx_busy;
     reg tx_start = 1'b0;
     reg [7:0] tx_data, tx_data_next = 'd0;
@@ -56,7 +56,7 @@ module top_level
     assign led_mode = sw_mode;
     assign leds = switches;
 
-    /* Payload (11 chars) */
+    /* Payload (13 chars). */
     localparam STR_LEN = 13;
     wire [STR_LEN*8-1:0] message = {
         8'h48, 8'h65, 8'h6c, 8'h6c, 8'h6f,
@@ -65,13 +65,13 @@ module top_level
         8'h0d, 8'h0a
     };
 
-    /* Contador de bytes */
+    /* Byte counter. */
     reg [3:0] bcounter, bcounter_next = 'd0;
 
-    /* Conectar el UART al Pmod JA */
+    /* Connect UART TX to Pmod JA. */
     assign uart_tx_alt = uart_tx;
 
-    /* Lógica combinacional */
+    /* Combinational logic. */
     always @(*) begin
         tx_start = 1'b0;
         tx_data_next = tx_data;
@@ -114,7 +114,7 @@ module top_level
         endcase
     end
 
-    /* Lógica secuencial */
+    /* Sequential logic. */
     always @(posedge clk_100M) begin
         if (reset) begin
             state <= S_IDLE;

@@ -227,7 +227,7 @@ module tb_uart_rx;
             if (rx_valid !== 1'b1)
                 fail("Overrun test: rx_valid dropped before rx_ack");
 
-            /* Acknowledge — both flags must clear */
+            /* Acknowledge -- both flags must clear */
             pulse_ack_clk();
             begin : wait_overrun_clear
                 for (i = 0; i < 32; i = i + 1) begin

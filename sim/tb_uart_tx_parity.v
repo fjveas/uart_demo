@@ -9,8 +9,8 @@
  *   dut_odd   PARITY=2  (odd  parity)
  *
  * For each test byte the expected parity bit is computed as:
- *   even  →  ^data_byte         (XOR of all 8 data bits)
- *   odd   →  ~^data_byte        (inverted XOR)
+ *   even  -> ^data_byte         (XOR of all 8 data bits)
+ *   odd   -> ~^data_byte        (inverted XOR)
  *
  * Example (from repo root):
  *   verilator -Wall --binary sim/tb_uart_tx_parity.v src/hdl/uart/uart_tx.v
@@ -77,7 +77,7 @@ module tb_uart_tx_parity;
     /*
      * Drive data_byte through both DUTs simultaneously and verify the full
      * frame: start bit, 8 data bits (LSB-first), parity bit, stop bit, and
-     * tx_busy deassertion.  The parity bit is computed from data_byte alone —
+     * tx_busy deassertion.  The parity bit is computed from data_byte alone --
      * no magic constants in the test.
      */
     task automatic send_and_check_parity(input [7:0] data_byte);
@@ -94,13 +94,13 @@ module tb_uart_tx_parity;
             tx_start = 1'b0;
             @(posedge clk);
 
-            /* Start bit — both DUTs must drive the line low. */
+            /* Start bit -- both DUTs must drive the line low. */
             if (tx_even !== 1'b0) fail("even: start bit not low");
             if (tx_odd  !== 1'b0) fail("odd:  start bit not low");
             if (tx_busy_even !== 1'b1) fail("even: tx_busy not set during start");
             if (tx_busy_odd  !== 1'b1) fail("odd:  tx_busy not set during start");
 
-            tick1(); /* → TX_SEND, bit index 0 */
+            tick1(); /* -> TX_SEND, bit index 0 */
 
             /* Eight data bits, LSB first. */
             for (i = 0; i < 8; i = i + 1) begin
@@ -118,7 +118,7 @@ module tb_uart_tx_parity;
             if (tx_odd  !== exp_odd_par)  fail("odd:  wrong parity bit");
             tick1();
 
-            /* Stop bit — both DUTs must return to idle-high. */
+            /* Stop bit -- both DUTs must return to idle-high. */
             if (tx_even !== 1'b1) fail("even: stop bit not high");
             if (tx_odd  !== 1'b1) fail("odd:  stop bit not high");
             tick1();
@@ -147,7 +147,7 @@ module tb_uart_tx_parity;
         repeat (2) @(posedge clk);
 
         /*
-         * 8'hA5 = 1010_0101 — four 1s (even count).
+         * 8'hA5 = 1010_0101 -- four 1s (even count).
          * Expected: even parity bit = 0, odd parity bit = 1.
          * Exercises the case where the even-parity bit must be 0.
          */
@@ -155,7 +155,7 @@ module tb_uart_tx_parity;
         send_and_check_parity(8'hA5);
 
         /*
-         * 8'h07 = 0000_0111 — three 1s (odd count).
+         * 8'h07 = 0000_0111 -- three 1s (odd count).
          * Expected: even parity bit = 1, odd parity bit = 0.
          * Exercises the opposite polarity: even-parity bit must be 1.
          */
@@ -163,7 +163,7 @@ module tb_uart_tx_parity;
         send_and_check_parity(8'h07);
 
         /*
-         * 8'h00 — no 1s; parity accumulator must start clean on every new
+         * 8'h00 -- no 1s; parity accumulator must start clean on every new
          * frame (not carry over from the previous one).
          * Expected: even parity bit = 0, odd parity bit = 1.
          */
@@ -171,7 +171,7 @@ module tb_uart_tx_parity;
         send_and_check_parity(8'h00);
 
         /*
-         * 8'hFF = 1111_1111 — eight 1s (even count).
+         * 8'hFF = 1111_1111 -- eight 1s (even count).
          * Expected: even parity bit = 0, odd parity bit = 1.
          * Verifies accumulator handles a run of all-ones correctly.
          */

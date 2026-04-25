@@ -23,7 +23,7 @@ module pb_debouncer
     reg [2:0] button_state, button_state_next = PB_IDLE;
     reg [COUNTER_MSB:0] pb_cnt, pb_cnt_next;
 
-    reg [1:0] pb_sync_sr; /* Flip Flops para sincronizar. */
+    reg [1:0] pb_sync_sr; /* Synchronizer flip-flops. */
     wire pb_sync = pb_sync_sr[0];
 
     wire pb_cnt_max = &pb_cnt;
@@ -34,7 +34,7 @@ module pb_debouncer
         else
             pb_sync_sr <= {pb, pb_sync_sr[1]};
 
-    /* Etapa combinacional para el cambio de estado. */
+    /* Combinational state transition logic. */
     always @(*) begin
         button_state_next = button_state;
 
@@ -59,7 +59,7 @@ module pb_debouncer
         endcase
     end
 
-    /* Etapa combinacional de las salidas y contador. */
+    /* Combinational output and counter logic. */
     always @(*) begin
         pb_state = 1'b0;
         pb_negedge = 1'b0;
@@ -80,14 +80,14 @@ module pb_debouncer
         endcase
     end
 
-    /* Registrando el estado. */
+    /* State register. */
     always @(posedge clk)
         if (rst)
             button_state <= PB_IDLE;
         else
             button_state <= button_state_next;
 
-    /* Registrando el contador. */
+    /* Counter register. */
     always @(posedge clk)
         if (rst)
             pb_cnt <= 'd0;

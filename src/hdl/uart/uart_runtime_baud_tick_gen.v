@@ -133,4 +133,3 @@ module uart_runtime_baud_tick_gen
     end
 
 endmodule
-

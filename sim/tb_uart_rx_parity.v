@@ -11,10 +11,10 @@
  * Because both DUTs see the same rx waveform, a single driven parity bit
  * exercises both the "correct parity" and "wrong parity" paths in one pass:
  *
- *   data XOR=0, drive parity=0  →  dut_even: no error   dut_odd: error
- *   data XOR=0, drive parity=1  →  dut_even: error      dut_odd: no error
- *   data XOR=1, drive parity=1  →  dut_even: no error   dut_odd: error
- *   data XOR=1, drive parity=0  →  dut_even: error      dut_odd: no error
+ *   data XOR=0, drive parity=0  -> dut_even: no error   dut_odd: error
+ *   data XOR=0, drive parity=1  -> dut_even: error      dut_odd: no error
+ *   data XOR=1, drive parity=1  -> dut_even: no error   dut_odd: error
+ *   data XOR=1, drive parity=0  -> dut_even: error      dut_odd: no error
  *
  * Example (from repo root):
  *   verilator -Wall --binary sim/tb_uart_rx_parity.v \
@@ -165,7 +165,7 @@ module tb_uart_rx_parity;
             if (rx_data_even !== data_byte) fail("even: rx_data mismatch");
             if (rx_data_odd  !== data_byte) fail("odd:  rx_data mismatch");
 
-            /* Frame error must not be set — we always send a valid stop bit. */
+            /* Frame error must not be set -- we always send a valid stop bit. */
             if (rx_frame_error_even !== 1'b0) fail("even: unexpected rx_frame_error");
             if (rx_frame_error_odd  !== 1'b0) fail("odd:  unexpected rx_frame_error");
 
@@ -246,7 +246,7 @@ module tb_uart_rx_parity;
         hold_line(1'b1, 32);
 
         /*
-         * 8'hA5 = 1010_0101 — four 1s, XOR=0.
+         * 8'hA5 = 1010_0101 -- four 1s, XOR=0.
          * Drive parity bit = 0 (matches even parity, violates odd parity).
          * Expected: dut_even no error, dut_odd error.
          */
@@ -261,7 +261,7 @@ module tb_uart_rx_parity;
         recv_parity_expect(8'hA5, 1'b1, 1'b1, 1'b0);
 
         /*
-         * 8'h07 = 0000_0111 — three 1s, XOR=1.
+         * 8'h07 = 0000_0111 -- three 1s, XOR=1.
          * Drive parity bit = 1 (matches even parity, violates odd parity).
          * Expected: dut_even no error, dut_odd error.
          */
@@ -276,7 +276,7 @@ module tb_uart_rx_parity;
         recv_parity_expect(8'h07, 1'b0, 1'b1, 1'b0);
 
         /*
-         * 8'h00 — no 1s, XOR=0.  Parity accumulator must start clean each
+         * 8'h00 -- no 1s, XOR=0.  Parity accumulator must start clean each
          * frame; drive parity=0 to verify the even case at the boundary.
          * Expected: dut_even no error, dut_odd error.
          */
@@ -284,7 +284,7 @@ module tb_uart_rx_parity;
         recv_parity_expect(8'h00, 1'b0, 1'b0, 1'b1);
 
         /*
-         * 8'hFF — eight 1s, XOR=0.  Verifies the accumulator handles a
+         * 8'hFF -- eight 1s, XOR=0.  Verifies the accumulator handles a
          * sustained run of all-ones without overflow.
          * Drive parity=0 (matches even).
          * Expected: dut_even no error, dut_odd error.
