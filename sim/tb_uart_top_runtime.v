@@ -407,6 +407,7 @@ module tb_uart_top_runtime;
         integer ack_cycles;
         integer cpb_115;
         integer cpb_9600;
+        reg [dut.baud_tick_gen_blk.ACC_WIDTH:0] rx_increment_before;
         begin
             cpb_115  = cycles_per_bit_from_sel(BAUD_SEL_115200);
             cpb_9600 = cycles_per_bit_from_sel(BAUD_SEL_9600);
@@ -418,9 +419,20 @@ module tb_uart_top_runtime;
             if (rx_data !== 8'hD2)
                 fail("rx baud gate: frame 1 data mismatch");
 
+            /*
+             * This test intentionally checks the internal active increment.
+             * A purely end-to-end frame check can prove the baud eventually
+             * changes after rx_ack, but it cannot prove the pending-byte gate
+             * held the old rate while rx_valid was still asserted.
+             */
+            rx_increment_before = dut.baud_tick_gen_blk.rx_increment_active;
+
             /* rx_valid is high; switch baud — gate must suppress the update. */
             cfg_baud_sel = BAUD_SEL_9600;
             repeat (10 * cpb_115) @(posedge clk);
+            #1ps;
+            if (dut.baud_tick_gen_blk.rx_increment_active !== rx_increment_before)
+                fail("rx baud gate: active increment changed while rx_valid was high");
 
             pulse_rx_ack();
             begin : wait_baud_gate_clear
@@ -436,6 +448,9 @@ module tb_uart_top_runtime;
             rx_in = 1'b1;
             /* Allow the accumulator to settle at the new rate. */
             repeat (4 * cpb_115) @(posedge clk);
+            #1ps;
+            if (dut.baud_tick_gen_blk.rx_increment_active === rx_increment_before)
+                fail("rx baud gate: active increment did not update after rx_ack");
 
             /* Frame 2 at 9600 confirms the baud switch completed cleanly. */
             rx_send_and_expect_cfg(8'hD2, cpb_9600, PARITY_NONE, 1'b0, 1'b0, 1'b0, PARITY_NONE, 1'b0, 3'd0);
