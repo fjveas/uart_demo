@@ -16,8 +16,8 @@ module uart_rx
     input baud8_tick,
     input rx,
     input rx_ack,
-    output reg [7:0] rx_data,
-    output reg rx_valid,
+    output [7:0] rx_data,
+    output rx_valid,
     /*
      * rx_frame_error, rx_parity_error, and rx_overrun are only meaningful
      * while rx_valid is asserted; the consumer must sample them before
@@ -29,9 +29,59 @@ module uart_rx
      * rx_overrun:      a new start bit arrived while the previous byte was
      *                  waiting for rx_ack — that incoming frame will be lost.
      */
+    output rx_frame_error,
+    output rx_parity_error,
+    output rx_overrun
+);
+
+    wire [1:0] cfg_parity;
+    wire rx_busy_unused;
+
+    assign cfg_parity = PARITY[1:0];
+
+    uart_rx_core uart_rx_core_inst (
+        .clk(clk),
+        .reset(reset),
+        .baud8_tick(baud8_tick),
+        .cfg_parity(cfg_parity),
+        .rx(rx),
+        .rx_ack(rx_ack),
+        .rx_data(rx_data),
+        .rx_valid(rx_valid),
+        .rx_frame_error(rx_frame_error),
+        .rx_parity_error(rx_parity_error),
+        .rx_overrun(rx_overrun),
+        .rx_busy(rx_busy_unused)
+    );
+
+endmodule
+
+/* verilator lint_off DECLFILENAME */
+module uart_rx_core
+(
+    input clk,
+    input reset,
+    input baud8_tick,
+    input [1:0] cfg_parity,
+    input rx,
+    input rx_ack,
+    output reg [7:0] rx_data,
+    output reg rx_valid,
+    /*
+     * rx_frame_error, rx_parity_error, and rx_overrun are only meaningful
+     * while rx_valid is asserted; the consumer must sample them before
+     * issuing rx_ack.
+     *
+     * rx_frame_error:  bad stop bit on the current byte.
+     * rx_parity_error: received parity bit does not match the expected value
+     *                  (only asserted when cfg_parity != 0).
+     * rx_overrun:      a new start bit arrived while the previous byte was
+     *                  waiting for rx_ack — that incoming frame will be lost.
+     */
     output reg rx_frame_error,
     output reg rx_parity_error,
-    output reg rx_overrun
+    output reg rx_overrun,
+    output rx_busy
 );
 
     localparam PARITY_EVEN = 1;
@@ -64,6 +114,7 @@ module uart_rx
     reg [2:0] state, state_next;
     reg [2:0] bit_counter, bit_counter_next;
     reg [7:0] rx_data_next;
+    reg [1:0] parity_mode;
     reg frame_error, frame_error_next;
     reg parity_error, parity_error_next;
     reg parity_acc, parity_acc_next;
@@ -76,6 +127,7 @@ module uart_rx
     assign rx_ack_seen  = rx_ack_pending | rx_ack;
     assign start_attempt = rx_bit_prev & ~rx_bit;
     assign overrun_live  = overrun | start_pending;
+    assign rx_busy       = (state != RX_IDLE && state != RX_READY);
 
     always @(*) begin
         state_next = state;
@@ -94,7 +146,7 @@ module uart_rx
         end
         RX_RECV:
             if (next_bit && bit_counter == 'd7)
-                state_next = (PARITY == PARITY_EVEN || PARITY == PARITY_ODD) ? RX_PARITY : RX_STOP;
+                state_next = (parity_mode == PARITY_EVEN || parity_mode == PARITY_ODD) ? RX_PARITY : RX_STOP;
         RX_PARITY:
             if (next_bit)
                 state_next = RX_STOP;
@@ -142,7 +194,7 @@ module uart_rx
         RX_PARITY: begin
             if (next_bit) begin
                 /* Compare the received parity bit against the expected value. */
-                if (rx_bit !== (parity_acc ^ (PARITY == PARITY_ODD ? 1'b1 : 1'b0)))
+                if (rx_bit !== (parity_acc ^ (parity_mode == PARITY_ODD ? 1'b1 : 1'b0)))
                     parity_error_next = 1'b1;
             end
         end
@@ -183,6 +235,7 @@ module uart_rx
             rx_data         <= 'd0;
             frame_error     <= 1'b0;
             parity_error    <= 1'b0;
+            parity_mode     <= 'd0;
             parity_acc      <= 1'b0;
             overrun         <= 1'b0;
             rx_ack_pending  <= 1'b0;
@@ -198,6 +251,14 @@ module uart_rx
                 start_pending <= 1'b1;
 
             if (baud8_tick) begin
+                /*
+                 * Commit the runtime framing mode only after a valid start bit
+                 * has been confirmed, so a short low glitch cannot reconfigure
+                 * the receiver for the next byte.
+                 */
+                if (state == RX_START && next_bit && rx_bit == 1'b0)
+                    parity_mode <= cfg_parity;
+
                 spacing_counter <= spacing_counter_next;
                 bit_counter     <= bit_counter_next;
                 state           <= state_next;
@@ -217,3 +278,4 @@ module uart_rx
     end
 
 endmodule
+/* verilator lint_on DECLFILENAME */

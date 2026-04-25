@@ -16,6 +16,35 @@ module uart_tx
     input baud_tick,
     input tx_start,
     input [7:0] tx_data,
+    output tx,
+    output tx_busy
+);
+
+    wire [1:0] cfg_parity;
+    assign cfg_parity = PARITY[1:0];
+
+    uart_tx_core uart_tx_core_inst (
+        .clk(clk),
+        .reset(reset),
+        .baud_tick(baud_tick),
+        .cfg_parity(cfg_parity),
+        .tx_start(tx_start),
+        .tx_data(tx_data),
+        .tx(tx),
+        .tx_busy(tx_busy)
+    );
+
+endmodule
+
+/* verilator lint_off DECLFILENAME */
+module uart_tx_core
+(
+    input clk,
+    input reset,
+    input baud_tick,
+    input [1:0] cfg_parity,
+    input tx_start,
+    input [7:0] tx_data,
     output reg tx,
     output reg tx_busy
 );
@@ -32,6 +61,7 @@ module uart_tx
     reg [2:0] state, state_next;
     reg [2:0] counter, counter_next;
     reg [7:0] tx_data_reg;
+    reg [1:0] parity_mode;
     reg parity_acc, parity_acc_next;
 
     always @(posedge clk) begin
@@ -67,11 +97,11 @@ module uart_tx
                 parity_acc_next = parity_acc ^ tx_data_reg[counter];
                 counter_next = counter + 'd1;
                 if (counter == 'd7)
-                    state_next = (PARITY == PARITY_EVEN || PARITY == PARITY_ODD) ? TX_PARITY : TX_STOP;
+                    state_next = (parity_mode == PARITY_EVEN || parity_mode == PARITY_ODD) ? TX_PARITY : TX_STOP;
             end
         end
         TX_PARITY: begin
-            tx = parity_acc ^ (PARITY == PARITY_ODD ? 1'b1 : 1'b0);
+            tx = parity_acc ^ (parity_mode == PARITY_ODD ? 1'b1 : 1'b0);
             if (baud_tick)
                 state_next = TX_STOP;
         end
@@ -87,8 +117,15 @@ module uart_tx
         if (reset) begin
             state <= TX_IDLE;
             counter <= 'd0;
+            parity_mode <= 'd0;
             parity_acc <= 1'b0;
         end else begin
+            /*
+             * Latch the framing mode when a new byte is accepted so a runtime
+             * config change cannot alter the parity bit halfway through a frame.
+             */
+            if (state == TX_IDLE && tx_start)
+                parity_mode <= cfg_parity;
             state <= state_next;
             counter <= counter_next;
             parity_acc <= parity_acc_next;
@@ -96,3 +133,4 @@ module uart_tx
     end
 
 endmodule
+/* verilator lint_on DECLFILENAME */
