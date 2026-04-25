@@ -29,7 +29,10 @@ module pb_debouncer
 	wire pb_cnt_max = &pb_cnt;
 
 	always @(posedge clk)
-		pb_sync_sr <= {pb, pb_sync_sr[1]};
+		if (rst)
+			pb_sync_sr <= 'd0;
+		else
+			pb_sync_sr <= {pb, pb_sync_sr[1]};
 
 	/* Etapa combinacional para el cambio de estado. */
 	always @(*) begin
